@@ -62,7 +62,7 @@
 #include <openvpn/transport/gremlin.hpp>
 #endif
 
-#if defined(OPENVPN_PLATFORM_ANDROID)
+#if defined(OPENVPN_PLATFORM_ANDROID) && !defined(NO_ROUTE_EXCLUDE_EMULATION)
 #include <openvpn/client/cliemuexr.hpp>
 #endif
 
@@ -370,9 +370,10 @@ namespace openvpn {
 	    if (config.tun_persist)
 	      tunconf->tun_prop.remote_bypass = true;
 #endif
-#if defined(OPENVPN_PLATFORM_ANDROID)
+#if defined(OPENVPN_PLATFORM_ANDROID) && !defined(NO_ROUTE_EXCLUDE_EMULATION)
 	    // Android VPN API doesn't support excluded routes, so we must emulate them
-	    tunconf->eer_factory.reset(new EmulateExcludeRouteFactoryImpl(false));
+        // OpenVPN for Android does this on its own, so we allow to disable this here
+        tunconf->eer_factory.reset(new EmulateExcludeRouteFactoryImpl(false));
 #endif
 #if defined(OPENVPN_PLATFORM_MAC)
 	    tunconf->tun_prefix = true;

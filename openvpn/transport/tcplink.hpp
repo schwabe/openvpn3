@@ -74,6 +74,17 @@ namespace openvpn {
 	       free_list_max_size_arg, frame_context_arg, stats_arg)
       { }
 
+
+      // Called by LinkCommon and TCPTransport Client class
+      unsigned int send_queue_size() const override
+      {
+	return Base::queue.size()
+#ifdef OPENVPN_GREMLIN
+	  + (gremlin ? gremlin->send_size() : 0)
+#endif
+	  ;
+      }
+
     private:
       // Called by LinkCommon
       virtual void from_app_send_buffer(BufferPtr& buf) override

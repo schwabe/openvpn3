@@ -128,6 +128,11 @@ namespace openvpn {
       // add routes
       add_routes(tb, opt, server_addr, ipv, eer.get(), quiet);
 
+      // Route emulation needs to know if default routes are included from
+      // redirect-gateway
+      if(eer)
+        eer->add_default_routes(ipv.rgv4(), ipv.rgv6());
+
       // emulate exclude routes
       if (eer && eer->enabled(ipv))
 	eer->emulate(tb, ipv, server_addr);
@@ -335,7 +340,9 @@ namespace openvpn {
 				  EmulateExcludeRoute* eer)
     {
       const std::string addr_str = addr.to_string();
-      if (add)
+      if (eer)
+	eer->add_route(add, addr, prefix_length);
+      else if (add)
 	{
 	  if (!tb->tun_builder_add_route(addr_str, prefix_length, metric, ipv6))
 	    throw tun_prop_route_error("tun_builder_add_route failed");
@@ -345,8 +352,7 @@ namespace openvpn {
 	  if (!tb->tun_builder_exclude_route(addr_str, prefix_length, metric, ipv6))
 	    throw tun_prop_route_error("tun_builder_exclude_route failed");
 	}
-      if (eer)
-	eer->add_route(add, addr, prefix_length);
+
     }
 
     // Check the target of a route.

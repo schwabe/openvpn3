@@ -47,6 +47,14 @@ namespace openvpn {
       (add ? include : exclude).emplace_back(addr, prefix_len);
     }
 
+    virtual void add_default_routes(bool ipv4, bool ipv6)
+    {
+      if (ipv4)
+	add_route(true, IP::Addr::from_zero(IP::Addr::V4), 0);
+      if (ipv6)
+	add_route(true, IP::Addr::from_zero(IP::Addr::V6), 0);
+    }
+
     virtual bool enabled(const IPVerFlags& ipv) const
     {
       return exclude.size() && (ipv.rgv4() || ipv.rgv6());
@@ -66,17 +74,43 @@ namespace openvpn {
 	    rl.emplace_back(server_addr, server_addr.size());
 
 	  const IP::RouteInverter ri(rl, rg_ver_flags);
-	  OPENVPN_LOG("Exclude routes emulation:\n" << ri);
+	  //OPENVPN_LOG("Exclude routes emulation:\n" << ri);
 	  for (IP::RouteInverter::const_iterator i = ri.begin(); i != ri.end(); ++i)
 	    {
 	      const IP::Route& r = *i;
-	      if (!tb->tun_builder_add_route(r.addr.to_string(), r.prefix_len, -1, r.addr.version() == IP::Addr::V6))
-		throw emulate_exclude_route_error("tun_builder_add_route failed");
+	      if (checkRouteShouldBeInstalled(r))
+		if (!tb->tun_builder_add_route(r.addr.to_string(), r.prefix_len, -1, r.addr.version() == IP::Addr::V6))
+		  throw emulate_exclude_route_error("tun_builder_add_route failed");
 	    }
 
 	  ipv.set_emulate_exclude_routes();
 	}
     }
+
+    bool checkRouteShouldBeInstalled(const IP::Route& r) const
+      {
+	IP::Route const* bestroute = nullptr;
+	// Get the best (longest-prefix) route from included routes that matches
+	for (const auto& incRoute: include)
+	{
+	  if (incRoute.contains (r))
+	    {
+	      if (bestroute == nullptr || bestroute->prefix_len < incRoute.prefix_len )
+	        bestroute = &incRoute;
+	    }
+	}
+	// No postive route matches the route at all, do not install it
+	if (!bestroute)
+	  return false;
+
+	// Check if there is a more specific exclude route
+	for (const auto& exclRoute: exclude)
+	  {
+	    if (exclRoute.contains (r) && exclRoute.prefix_len > bestroute->prefix_len)
+	      return false;
+	  }
+        return true;
+      }
 
     const bool exclude_server_address_;
     IP::RouteList include;

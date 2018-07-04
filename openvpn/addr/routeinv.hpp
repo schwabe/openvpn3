@@ -60,7 +60,16 @@ namespace openvpn {
 	SUBROUTE,
 	LEAF,
       };
-
+      /**
+       * This method construct a non-overlapping list of routes span the address
+       * space in @param route.  The routes are constructed in a way that each
+       * route in the returned list is smaller or equalto each route in
+       * parameter @param in
+       *
+       * @param ver IP version
+       * @param route The route we currently are looking at and split if it does
+       * 	      not meet the requirements
+       */
       void descend(const RouteList& in, const Addr::Version ver, const Route& route)
       {
 	switch (find(in, route))
@@ -77,10 +86,9 @@ namespace openvpn {
 		push_back(route);
 	      break;
 	    }
+	  case EQUAL:
 	  case LEAF:
 	    push_back(route);
-	    break;
-	  case EQUAL:
 	    break;
 	  }
       }
@@ -92,9 +100,9 @@ namespace openvpn {
 	  {
 	    const Route& r = *i;
 	    if (route == r)
-	      return EQUAL;
+	      type = EQUAL;
 	    else if (route.contains(r))
-	      type = SUBROUTE;
+	      return SUBROUTE;
 	  }
 	return type;
       }

@@ -1312,7 +1312,7 @@ namespace openvpn {
 	xts.emplace_back(xt_type, depth, x509_get_field(cert, nid));
     }
 
-    static void x509_track_extract_from_cert(::X509 *cert,
+    static bool x509_track_extract_from_cert(::X509 *cert,
 					     const int depth,
 					     const X509Track::ConfigSet& cs,
 					     X509Track::Set& xts)
@@ -1334,9 +1334,15 @@ namespace openvpn {
 				   x509_get_serial_hex(cert));
 		  break;
 		case X509Track::SHA1:
-		  xts.emplace_back(X509Track::SHA1,
-				   depth,
-				   render_hex_sep(cert->sha1_hash, SHA_DIGEST_LENGTH, ':', true));
+		  {
+		    unsigned char buf[EVP_MAX_MD_SIZE];
+		    unsigned int len = EVP_MAX_MD_SIZE;
+		    if (!X509_digest(cert, EVP_sha1(), buf, &len))
+		      return false;
+		    xts.emplace_back(X509Track::SHA1,
+				     depth,
+				     render_hex_sep (buf, len, ':', true));
+		  }
 		  break;
 		case X509Track::CN:
 		  x509_track_extract_nid(X509Track::CN, NID_commonName, cert, depth, xts);
@@ -1364,6 +1370,7 @@ namespace openvpn {
 		}
 	    }
 	}
+      return true;
     }
 
     static std::string cert_status_line(int preverify_ok,
@@ -1500,7 +1507,9 @@ namespace openvpn {
 	  if (self_ssl->authcert)
 	    {
 	      static_assert(sizeof(AuthCert::issuer_fp) == SHA_DIGEST_LENGTH, "size inconsistency");
-	      std::memcpy(self_ssl->authcert->issuer_fp, current_cert->sha1_hash, sizeof(AuthCert::issuer_fp));
+	      unsigned int digest_len = sizeof(AuthCert::issuer_fp);
+	      if (!X509_digest(current_cert, EVP_sha1(), self_ssl->authcert->issuer_fp, &digest_len))
+		preverify_ok = false;
 	    }
 	}
       else if (depth == 0) // leaf cert
@@ -1545,10 +1554,15 @@ namespace openvpn {
 
       // x509-track enabled?
       if (self_ssl->authcert && self_ssl->authcert->x509_track)
-	x509_track_extract_from_cert(current_cert,
-				     depth,
-				     self->config->x509_track_config,
-				     *self_ssl->authcert->x509_track);
+	{
+	  if (!x509_track_extract_from_cert(current_cert,
+					    depth,
+					    self->config->x509_track_config,
+					    *self_ssl->authcert->x509_track))
+	    {
+	      preverify_ok = false;
+	    }
+	}
 
       return preverify_ok || ((self->config->flags & SSLConst::DEFERRED_CERT_VERIFY)
 			      && self_ssl->authcert               // failsafe: don't defer error unless

@@ -530,11 +530,25 @@ namespace openvpn {
 	// (ssl_undefined_const_function) triggers an OpenSSL error condition
 	// which is not what we want.
 
+	/*
+	 * TODO (schwabe): *Why* are this? pending seems to be only used
+	 * internally in OpenSSL and I am not sure why we are fiddling with
+	 * OpenSSL internals.
+	 *
+	 * As far as I figured out this depends on SSL23 being a generic
+	 * method and OpenSSL later switching to a specific with ssl23_get_client_method
+	 * that has a proper pending method.
+	 *
+	 * OpenSSL 1.1.x does not allow hacks like this anymore.
+	 */
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 	ssl23_method_client_ = *SSLv23_client_method();
 	ssl23_method_client_.ssl_pending = ssl_pending_override;
 
 	ssl23_method_server_ = *SSLv23_server_method();
 	ssl23_method_server_.ssl_pending = ssl_pending_override;
+#endif
       }
 
     private:
@@ -668,21 +682,32 @@ namespace openvpn {
 	return bio;
       }
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
       /*
        * Return modified OpenSSL SSLv23 methods,
        * as configured in init_static().
        */
 
-      static const SSL_METHOD* ssl23_method_client()
+      static const SSL_METHOD* tls_method_client()
       {
 	return &ssl23_method_client_;
       }
 
-      static const SSL_METHOD* ssl23_method_server()
+      static const SSL_METHOD* tls_method_server()
       {
 	return &ssl23_method_server_;
       }
+#else
+      static const SSL_METHOD* tls_method_client ()
+      {
+        return TLS_client_method ();
+      }
 
+      static const SSL_METHOD* tls_method_server ()
+      {
+        return TLS_server_method ();
+      }
+#endif
       ::SSL *ssl;	   // OpenSSL SSL object
       BIO *ssl_bio;        // read/write cleartext from here
       BIO *ct_in;          // write ciphertext to here
@@ -871,7 +896,7 @@ namespace openvpn {
 	  const bool ssl23 = (!config->force_aes_cbc_ciphersuites || (config->tls_version_min > TLSVersion::UNDEF));
 	  if (config->mode.is_server())
 	    {
-	      ctx = SSL_CTX_new(ssl23 ? SSL::ssl23_method_server() : TLSv1_server_method());
+	      ctx = SSL_CTX_new(ssl23 ? SSL::tls_method_server () : TLSv1_server_method());
 	      if (ctx == nullptr)
 		throw OpenSSLException("OpenSSLContext: SSL_CTX_new failed for server method");
 
@@ -887,7 +912,7 @@ namespace openvpn {
 	    }
 	  else if (config->mode.is_client())
 	    {
-	      ctx = SSL_CTX_new(ssl23 ? SSL::ssl23_method_client() : TLSv1_client_method());
+	      ctx = SSL_CTX_new(ssl23 ? SSL::tls_method_client () : TLSv1_client_method());
 	      if (ctx == nullptr)
 		throw OpenSSLException("OpenSSLContext: SSL_CTX_new failed for client method");
 	      if (config->enable_renegotiation)
@@ -1533,8 +1558,10 @@ namespace openvpn {
 
   int OpenSSLContext::SSL::mydata_index = -1;
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
   SSL_METHOD OpenSSLContext::SSL::ssl23_method_client_;
   SSL_METHOD OpenSSLContext::SSL::ssl23_method_server_;
+#endif
 }
 
 #endif

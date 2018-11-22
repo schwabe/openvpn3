@@ -524,18 +524,32 @@ namespace openvpn {
 
 	mydata_index = SSL_get_ex_new_index(0, (char *)"OpenSSLContext::SSL", nullptr, nullptr, nullptr);
 
-	// We actually override some of the OpenSSL SSLv23 methods here,
-	// in particular the ssl_pending method.  We want ssl_pending
-	// to return 0 until the SSL negotiation establishes the
-	// actual method.  The default OpenSSL SSLv23 ssl_pending method
-	// (ssl_undefined_const_function) triggers an OpenSSL error condition
-	// which is not what we want.
+	/*
+	 * We actually override some of the OpenSSL SSLv23 methods here,
+	 * in particular the ssl_pending method.  We want ssl_pending
+	 * to return 0 until the SSL negotiation establishes the
+	 * actual method.  The default OpenSSL SSLv23 ssl_pending method
+	 * (ssl_undefined_const_function) triggers an OpenSSL error condition
+	 * when calling SSL_pending early which is not what we want.
+	 *
+	 * This depends on SSL23 being a generic method and OpenSSL later
+	 * switching to a spefic TLS method (TLS10method etc..) with
+	 * ssl23_get_client_method that has the proper ssl3_pending pending
+	 * method.
+	 *
+	 * OpenSSL 1.1.x does not allow hacks like this anymore. So overriding
+	 * is not possible. Fortunately OpenSSL 1.1 also always defines
+	 * ssl_pending method to be ssl3_pending, so this hack is no
+	 * longer needed.
+	 */
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 	ssl23_method_client_ = *SSLv23_client_method();
 	ssl23_method_client_.ssl_pending = ssl_pending_override;
 
 	ssl23_method_server_ = *SSLv23_server_method();
 	ssl23_method_server_.ssl_pending = ssl_pending_override;
+#endif
       }
 
     private:
@@ -669,21 +683,36 @@ namespace openvpn {
 	return bio;
       }
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
       /*
        * Return modified OpenSSL SSLv23 methods,
        * as configured in init_static().
        */
 
-      static const SSL_METHOD* ssl23_method_client()
+      static const SSL_METHOD* tls_method_client()
       {
 	return &ssl23_method_client_;
       }
 
-      static const SSL_METHOD* ssl23_method_server()
+      static const SSL_METHOD* tls_method_server()
       {
 	return &ssl23_method_server_;
       }
 
+      // Modified SSLv23 methods
+      static SSL_METHOD ssl23_method_client_;
+      static SSL_METHOD ssl23_method_server_;
+#else
+      static const SSL_METHOD* tls_method_client()
+      {
+	return TLS_client_method();
+      }
+
+      static const SSL_METHOD* tls_method_server()
+      {
+	return TLS_server_method();
+      }
+#endif
       ::SSL *ssl;	   // OpenSSL SSL object
       BIO *ssl_bio;        // read/write cleartext from here
       BIO *ct_in;          // write ciphertext to here
@@ -694,10 +723,6 @@ namespace openvpn {
 
       // Helps us to store pointer to self in ::SSL object
       static int mydata_index;
-
-      // Modified SSLv23 methods
-      static SSL_METHOD ssl23_method_client_;
-      static SSL_METHOD ssl23_method_server_;
     };
 
   private:
@@ -872,7 +897,7 @@ namespace openvpn {
 	  const bool ssl23 = (!config->force_aes_cbc_ciphersuites || (config->tls_version_min > TLSVersion::UNDEF));
 	  if (config->mode.is_server())
 	    {
-	      ctx = SSL_CTX_new(ssl23 ? SSL::ssl23_method_server() : TLSv1_server_method());
+	      ctx = SSL_CTX_new(ssl23 ? SSL::tls_method_server () : TLSv1_server_method());
 	      if (ctx == nullptr)
 		throw OpenSSLException("OpenSSLContext: SSL_CTX_new failed for server method");
 
@@ -888,7 +913,7 @@ namespace openvpn {
 	    }
 	  else if (config->mode.is_client())
 	    {
-	      ctx = SSL_CTX_new(ssl23 ? SSL::ssl23_method_client() : TLSv1_client_method());
+	      ctx = SSL_CTX_new(ssl23 ? SSL::tls_method_client () : TLSv1_client_method());
 	      if (ctx == nullptr)
 		throw OpenSSLException("OpenSSLContext: SSL_CTX_new failed for client method");
 	      if (config->enable_renegotiation)
@@ -1534,8 +1559,10 @@ namespace openvpn {
 
   int OpenSSLContext::SSL::mydata_index = -1;
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
   SSL_METHOD OpenSSLContext::SSL::ssl23_method_client_;
   SSL_METHOD OpenSSLContext::SSL::ssl23_method_server_;
+#endif
 }
 
 #endif

@@ -1419,8 +1419,11 @@ namespace openvpn {
       // get depth
       const int depth = X509_STORE_CTX_get_error_depth(ctx);
 
+      // get current certificate
+      X509* current_cert = X509_STORE_CTX_get_current_cert (ctx);
+
       // log subject
-      const std::string subject = x509_get_subject(ctx->current_cert);
+      const std::string subject = x509_get_subject(current_cert);
       if (self->config->flags & SSLConst::LOG_VERIFY_STATUS)
 	OPENVPN_LOG_SSL(cert_status_line(preverify_ok, depth, X509_STORE_CTX_get_error(ctx), subject));
 
@@ -1428,21 +1431,21 @@ namespace openvpn {
       if (depth == 0)
 	{
 	  // verify ns-cert-type
-	  if (self->ns_cert_type_defined() && !self->verify_ns_cert_type(ctx->current_cert))
+	  if (self->ns_cert_type_defined() && !self->verify_ns_cert_type(current_cert))
 	    {
 	      OPENVPN_LOG_SSL("VERIFY FAIL -- bad ns-cert-type in leaf certificate");
 	      preverify_ok = false;
 	    }
 
 	  // verify X509 key usage
-	  if (self->x509_cert_ku_defined() && !self->verify_x509_cert_ku(ctx->current_cert))
+	  if (self->x509_cert_ku_defined() && !self->verify_x509_cert_ku(current_cert))
 	    {
 	      OPENVPN_LOG_SSL("VERIFY FAIL -- bad X509 key usage in leaf certificate");
 	      preverify_ok = false;
 	    }
 
 	  // verify X509 extended key usage
-	  if (self->x509_cert_eku_defined() && !self->verify_x509_cert_eku(ctx->current_cert))
+	  if (self->x509_cert_eku_defined() && !self->verify_x509_cert_eku(current_cert))
 	    {
 	      OPENVPN_LOG_SSL("VERIFY FAIL -- bad X509 extended key usage in leaf certificate");
 	      preverify_ok = false;
@@ -1452,7 +1455,7 @@ namespace openvpn {
 	  if (!self->config->tls_remote.empty())
 	    {
 	      const std::string subj = TLSRemote::sanitize_x509_name(subject);
-	      const std::string common_name = TLSRemote::sanitize_common_name(x509_get_field(ctx->current_cert, NID_commonName));
+	      const std::string common_name = TLSRemote::sanitize_common_name(x509_get_field(current_cert, NID_commonName));
 	      TLSRemote::log(self->config->tls_remote, subj, common_name);
 	      if (!TLSRemote::test(self->config->tls_remote, subj, common_name))
 		{
@@ -1482,9 +1485,12 @@ namespace openvpn {
       // get depth
       const int depth = X509_STORE_CTX_get_error_depth(ctx);
 
+      // get current certificate
+      X509* current_cert = X509_STORE_CTX_get_current_cert (ctx);
+
       // log subject
       if (self->config->flags & SSLConst::LOG_VERIFY_STATUS)
-	OPENVPN_LOG_SSL(cert_status_line(preverify_ok, depth, err, x509_get_subject(ctx->current_cert)));
+	OPENVPN_LOG_SSL(cert_status_line(preverify_ok, depth, err, x509_get_subject(current_cert)));
 
       // record cert error in authcert
       if (!preverify_ok && self_ssl->authcert)
@@ -1496,13 +1502,13 @@ namespace openvpn {
 	  if (self_ssl->authcert)
 	    {
 	      static_assert(sizeof(AuthCert::issuer_fp) == SHA_DIGEST_LENGTH, "size inconsistency");
-	      std::memcpy(self_ssl->authcert->issuer_fp, ctx->current_cert->sha1_hash, sizeof(AuthCert::issuer_fp));
+	      std::memcpy(self_ssl->authcert->issuer_fp, current_cert->sha1_hash, sizeof(AuthCert::issuer_fp));
 	    }
 	}
       else if (depth == 0) // leaf cert
 	{
 	  // verify ns-cert-type
-	  if (self->ns_cert_type_defined() && !self->verify_ns_cert_type(ctx->current_cert))
+	  if (self->ns_cert_type_defined() && !self->verify_ns_cert_type(current_cert))
 	    {
 	      OPENVPN_LOG_SSL("VERIFY FAIL -- bad ns-cert-type in leaf certificate");
 	      if (self_ssl->authcert)
@@ -1511,7 +1517,7 @@ namespace openvpn {
 	    }
 
 	  // verify X509 key usage
-	  if (self->x509_cert_ku_defined() && !self->verify_x509_cert_ku(ctx->current_cert))
+	  if (self->x509_cert_ku_defined() && !self->verify_x509_cert_ku(current_cert))
 	    {
 	      OPENVPN_LOG_SSL("VERIFY FAIL -- bad X509 key usage in leaf certificate");
 	      if (self_ssl->authcert)
@@ -1520,7 +1526,7 @@ namespace openvpn {
 	    }
 
 	  // verify X509 extended key usage
-	  if (self->x509_cert_eku_defined() && !self->verify_x509_cert_eku(ctx->current_cert))
+	  if (self->x509_cert_eku_defined() && !self->verify_x509_cert_eku(current_cert))
 	    {
 	      OPENVPN_LOG_SSL("VERIFY FAIL -- bad X509 extended key usage in leaf certificate");
 	      if (self_ssl->authcert)
@@ -1531,17 +1537,17 @@ namespace openvpn {
 	  if (self_ssl->authcert)
 	    {
 	      // save the Common Name
-	      self_ssl->authcert->cn = x509_get_field(ctx->current_cert, NID_commonName);
+	      self_ssl->authcert->cn = x509_get_field(current_cert, NID_commonName);
 
 	      // save the leaf cert serial number
-	      const ASN1_INTEGER *ai = X509_get_serialNumber(ctx->current_cert);
+	      const ASN1_INTEGER *ai = X509_get_serialNumber(current_cert);
 	      self_ssl->authcert->sn = ai ? ASN1_INTEGER_get(ai) : -1;
 	    }
 	}
 
       // x509-track enabled?
       if (self_ssl->authcert && self_ssl->authcert->x509_track)
-	x509_track_extract_from_cert(ctx->current_cert,
+	x509_track_extract_from_cert(current_cert,
 				     depth,
 				     self->config->x509_track_config,
 				     *self_ssl->authcert->x509_track);

@@ -17,6 +17,7 @@
 #include <openssl/crypto.h>
 #include <openssl/rsa.h>
 #include <openssl/dsa.h>
+#include <openssl/hmac.h>
 
 /* Reimplemented/adjusted for 1.0.2 */
 

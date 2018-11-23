@@ -1364,7 +1364,7 @@ namespace openvpn {
 
 	    /* get signature */
 	    std::string sig_b64;
-	    const bool status = self->config->external_pki->sign(from_b64, sig_b64);
+	    const bool status = self->config->external_pki->sign(from_b64, sig_b64, openvpn::OVPN_RSA_PKCS1_PADDING);
 	    if (!status)
 	      throw ssl_external_pki("MbedTLS: could not obtain signature");
 

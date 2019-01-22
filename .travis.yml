@@ -32,7 +32,13 @@ matrix:
     - env: SSLLIB="openssl"
       os: linux
       compiler: clang
+    - env: SSLLIB="openssl" CFLAGS="-fsanitize=address"
+      os: linux
+      compiler: clang
     - env: SSLLIB="mbedtls"
+      os: linux
+      compiler: gcc
+    - env: SSLLIB="mbedtls" CFLAGS="-fsanitize=address"
       os: linux
       compiler: gcc
     - env: SSLLIB="mbedtls"

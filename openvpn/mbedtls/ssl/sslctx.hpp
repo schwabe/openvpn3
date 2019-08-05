@@ -1461,6 +1461,16 @@ namespace openvpn {
     }
   };
 
+  std::string get_ssl_library_version()
+  {
+    unsigned int ver = mbedtls_version_get_number();
+    std::string version = "mbed TLS " +
+			  std::to_string((ver>>24)&0xff) +
+			  "." + std::to_string((ver>>16)&0xff) +
+			  "." + std::to_string((ver>>8)&0xff);
+
+    return version;
+  }
 } // namespace openvpn
 
 #endif

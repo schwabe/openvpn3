@@ -2130,6 +2130,11 @@ namespace openvpn {
   SSL_METHOD OpenSSLContext::SSL::ssl23_method_client_;
   SSL_METHOD OpenSSLContext::SSL::ssl23_method_server_;
 #endif
+
+  std::string get_ssl_library_version()
+  {
+    return OpenSSL_version(OPENSSL_VERSION);
+  }
 }
 
 #endif

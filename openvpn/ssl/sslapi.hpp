@@ -175,7 +175,6 @@ namespace openvpn {
     virtual void set_x509_track(X509Track::ConfigSet x509_track_config_arg) = 0;
     virtual void set_rng(const RandomAPI::Ptr& rng_arg) = 0;
     virtual void load(const OptionList& opt, const unsigned int lflags) = 0;
-
 #ifdef HAVE_JSON
     virtual SSLConfigAPI::Ptr json_override(const Json::Value& root, const bool load_cert_key) const = 0;
 #endif
@@ -188,6 +187,15 @@ namespace openvpn {
 
     virtual SSLFactoryAPI::Ptr new_factory() = 0;
   };
+
+  /**
+   * Reports a human readable string of the SSL library in use and its version.
+   * E.g. mbed TLS 1.2.4
+   *
+   * @return a human readable SSL library version string
+   */
+  std::string get_ssl_library_version();
+
 }
 
 #endif

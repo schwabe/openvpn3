@@ -7,6 +7,7 @@
 %include "std_string.i" // for std::string typemaps
 %include "std_vector.i"
 %include "std_map.i"
+%include "swiginterface.i"
 
 // top-level C++ implementation file
 %{
@@ -21,8 +22,9 @@
 
 %apply size_t { openvpn::Error::Type };
 
+%interface(openvpn::ClientAPI::LogReceiver);
+
 // ignore these ClientAPI::OpenVPNClient bases
-%ignore openvpn::ClientAPI::LogReceiver;
 %ignore openvpn::ExternalTun::Factory;
 %ignore openvpn::ExternalTransport::Factory;
 
